@@ -16,3 +16,11 @@ Decision: Accepted as written
 Why: This was a reading/comprehension step, not code generation. Confirmed
 the sequence before writing default_maneuvers.csv so the CSV reproduces
 it exactly.
+
+## Session 2 - 2026-05-26
+
+Tool: Github Copilot 
+Prompt: Why isnt my maneuvers being used in line 29? (Error we encountered)
+Suggestion Summary: Your maneuvers list is declared and initialized, but you never add any Maneuver objects to it inside your constructor. After parsing each valid line from the CSV, you should create a Maneuver object and add it to the maneuvers list. 
+Decision: It gave us code to fix our issue, we decided to populate the list ourselves and used it as a guide to help us along.
+
