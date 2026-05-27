@@ -57,6 +57,11 @@ public class ManeuverScript {
                 double pitch = parseDoubleField(lineNumber, 3, "pitch", fields[2].trim());
                 double yaw = parseDoubleField(lineNumber, 4, "yaw", fields[3].trim());
 
+                validateRange(lineNumber, 1, "seconds", seconds, 1, Integer.MAX_VALUE);
+                validateRange(lineNumber, 2, "roll",    roll,   -180, 180);
+                validateRange(lineNumber, 3, "pitch",   pitch,   -90,  90);
+                validateRange(lineNumber, 4, "yaw",     yaw,   -180, 180);
+
                 this.maneuvers.add(new Maneuver(seconds, roll, pitch, yaw));
             }
         }
@@ -69,6 +74,42 @@ public class ManeuverScript {
 
         this.maneuvers = Collections.unmodifiableList(this.maneuvers);
         System.out.println("Successfully Loaded " + this.maneuvers.size() + " maneuvers from " + filePath);
+    }
+    private int parseIntField(int line, int fieldNum, String fieldName, String raw) {
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            String msg = "Script error on line " + line + " field " + fieldNum
+                    + " (\"" + fieldName + "\"): \"" + raw + "\" is not an integer";
+            System.err.println(msg);
+            throw new IllegalArgumentException(msg);
+        }
+    }
+
+    private double parseDoubleField(int line, int fieldNum, String fieldName, String raw) {
+        try {
+            return Double.parseDouble(raw);
+        } catch (NumberFormatException e) {
+            String msg = "Script error on line " + line + " field " + fieldNum
+                    + " (\"" + fieldName + "\"): \"" + raw + "\" is not a number";
+            System.err.println(msg);
+            throw new IllegalArgumentException(msg);
+        }
+    }
+
+    private void validateRange(int line, int fieldNum, String fieldName,
+                               double value, double min, double max) {
+        if (value < min || value > max) {
+            String msg = "Script error on line " + line + " field " + fieldNum
+                    + " (\"" + fieldName + "\"): " + value
+                    + " is out of range [" + min + ", " + max + "]";
+            System.err.println(msg);
+            throw new IllegalArgumentException(msg);
+        }
+    }
+
+    public List<Maneuver> getManeuvers() {
+        return maneuvers;
     }
 }
  
