@@ -29,7 +29,7 @@ public class ManeuverScript {
     private final List<Maneuver> maneuvers;
 
     public ManeuverScript(String filePath) throws IOException {
-        this.maneuvers = new ArrayList<>();
+        List<Maneuver> maneuverList = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))){
             String line;
             int lineNumber = 0;
@@ -62,17 +62,17 @@ public class ManeuverScript {
                 validateRange(lineNumber, 3, "pitch",   pitch,   -90,  90);
                 validateRange(lineNumber, 4, "yaw",     yaw,   -180, 180);
 
-                this.maneuvers.add(new Maneuver(seconds, roll, pitch, yaw));
+                maneuverList.add(new Maneuver(seconds, roll, pitch, yaw));
             }
         }
 
-        if (this.maneuvers.isEmpty()) {
+        if (maneuverList.isEmpty()) {
             String msg = "Script error: file contains no valid maneuvers.";
             System.err.println(msg);
             throw new IllegalArgumentException(msg);
         }
 
-        this.maneuvers = Collections.unmodifiableList(this.maneuvers);
+        this.maneuvers = Collections.unmodifiableList(maneuverList);
         System.out.println("Successfully Loaded " + this.maneuvers.size() + " maneuvers from " + filePath);
     }
     private int parseIntField(int line, int fieldNum, String fieldName, String raw) {

@@ -17,10 +17,18 @@ Why: This was a reading/comprehension step, not code generation. Confirmed
 the sequence before writing default_maneuvers.csv so the CSV reproduces
 it exactly.
 
-## Session 2 - 2026-05-26
 
+## Session 2 - 2026-05-26
 Tool: Github Copilot 
-Prompt: Why isnt my maneuvers being used in line 29? (Error we encountered)
+Prompt: > Why isn't my maneuvers being used in line 29? (Error we encountered)
+
 Suggestion Summary: Your maneuvers list is declared and initialized, but you never add any Maneuver objects to it inside your constructor. After parsing each valid line from the CSV, you should create a Maneuver object and add it to the maneuvers list. 
 Decision: It gave us code to fix our issue, we decided to populate the list ourselves and used it as a guide to help us along.
 
+
+## Session 3 - 2026-05-27
+Tool: Github Copilot
+Prompt: How would I fix the error the code is giving me?
+
+Suggestion Summary: The code had an error where we previously wrote this.maneuvers where Maneuver was a private final list, it could not be grabbed without referencing it with "this." However, it was giving an error once we added helper methods to continue the CSV file task.
+Decision: Accepted as written, we created a local variable as per copilot suggestions to debug and assign the unmodifiable list to the final field at the end.
