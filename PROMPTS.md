@@ -32,3 +32,23 @@ Prompt: How would I fix the error the code is giving me?
 
 Suggestion Summary: The code had an error where we previously wrote this.maneuvers where Maneuver was a private final list, it could not be grabbed without referencing it with "this." However, it was giving an error once we added helper methods to continue the CSV file task.
 Decision: Accepted as written, we created a local variable as per copilot suggestions to debug and assign the unmodifiable list to the final field at the end.
+
+## Session 4 – 2026-05-29
+Tool: GitHub Copilot
+
+Prompt (verbatim):
+The parser currently throws on the first error it finds. I want it to collect
+all errors from the whole file first, print them all, then throw once at the
+end. How do I modify the ManeuverScript constructor to do this?
+
+Suggestion summary:
+Copilot changed the constructor to use a List errors collector, replaced
+all throw statements inside the loop with errors.add(...) and continue, and
+added a block after the loop that prints all errors with forEach and throws
+once with a summary message.
+
+Decision: Accepted with modifications
+Why: The original suggestion used a single large try/catch per row which would
+have stopped parsing remaining fields on that row if the first field failed.
+Changed it to four separate try/catch blocks per row so all four fields are
+attempted independently, giving the most complete error report per line.
