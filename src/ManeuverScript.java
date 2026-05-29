@@ -6,7 +6,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class ManeuverScript {
-    // This java file will load and store the flight maneuver sequence in a CSV file.
+    // This java file will load and store the flight maneuver sequence in a CSV
+    // file.
 
     public static class Maneuver {
         public final int seconds;
@@ -26,11 +27,13 @@ public class ManeuverScript {
             return String.format("Maneuver(seconds=%d, roll=%.2f, pitch=%.2f, yaw=%.2f)", seconds, roll, pitch, yaw);
         }
     }
+
     private final List<Maneuver> maneuvers;
 
     public ManeuverScript(String filePath) throws IOException {
         List<Maneuver> maneuverList = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))){
+        List<String> errors = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             int lineNumber = 0;
             boolean headerSkipped = false;
@@ -43,27 +46,85 @@ public class ManeuverScript {
                 }
                 if (!headerSkipped) {
                     headerSkipped = true;
+                    if (!trimmed.toLowerCase().startsWith("seconds")) {
+                        System.err.println("Warning: first data line does not look like a header.");
+                    }
                     continue;
                 }
                 String[] fields = trimmed.split(",", -1);
                 if (fields.length != 4) {
-                    String msg = "Invalid number of fields at line " + lineNumber + ": expected 4 but got " + fields.length;
-                    System.err.println(msg);
-                    throw new IllegalArgumentException(msg);
+                    errors.add("Script error on line " + lineNumber + ": expected 4 fields but found " + fields.length);
+                    continue;
                 }
 
-                int seconds = parseIntField(lineNumber, 1, "seconds", fields[0].trim());
-                double roll = parseDoubleField(lineNumber, 2, "roll", fields[1].trim());
-                double pitch = parseDoubleField(lineNumber, 3, "pitch", fields[2].trim());
-                double yaw = parseDoubleField(lineNumber, 4, "yaw", fields[3].trim());
+                int seconds = 0;
+                double roll = 0, pitch = 0, yaw = 0;
+                boolean rowValid = true;
 
-                validateRange(lineNumber, 1, "seconds", seconds, 1, Integer.MAX_VALUE);
-                validateRange(lineNumber, 2, "roll",    roll,   -180, 180);
-                validateRange(lineNumber, 3, "pitch",   pitch,   -90,  90);
-                validateRange(lineNumber, 4, "yaw",     yaw,   -180, 180);
+                try {
+                    seconds = Integer.parseInt(fields[0].trim());
+                } catch (NumberFormatException e) {
+                    errors.add("Script error on line " + lineNumber + " field 1 (\"seconds\"): \"" + fields[0].trim()
+                            + "\" is not an integer");
+                    rowValid = false;
+                }
 
-                maneuverList.add(new Maneuver(seconds, roll, pitch, yaw));
+                try {
+                    roll = Double.parseDouble(fields[1].trim());
+                } catch (NumberFormatException e) {
+                    errors.add("Script error on line " + lineNumber + " field 2 (\"roll\"): \"" + fields[1].trim()
+                            + "\" is not a number");
+                    rowValid = false;
+                }
+
+                try {
+                    pitch = Double.parseDouble(fields[2].trim());
+                } catch (NumberFormatException e) {
+                    errors.add("Script error on line " + lineNumber + " field 3 (\"pitch\"): \"" + fields[2].trim()
+                            + "\" is not a number");
+                    rowValid = false;
+                }
+
+                try {
+                    yaw = Double.parseDouble(fields[3].trim());
+                } catch (NumberFormatException e) {
+                    errors.add("Script error on line " + lineNumber + " field 4 (\"yaw\"): \"" + fields[3].trim()
+                            + "\" is not a number");
+                    rowValid = false;
+                }
+
+                if (rowValid) {
+                    if (seconds < 1) {
+                        errors.add("Script error on line " + lineNumber + " field 1 (\"seconds\"): " + seconds
+                                + " is out of range [1, ∞)");
+                        rowValid = false;
+                    }
+                    if (roll < -180 || roll > 180) {
+                        errors.add("Script error on line " + lineNumber
+                                + " field 2 (\"roll\"): " + roll + " is out of range [-180, 180]");
+                        rowValid = false;
+                    }
+                    if (pitch < -90 || pitch > 90) {
+                        errors.add("Script error on line " + lineNumber
+                                + " field 3 (\"pitch\"): " + pitch + " is out of range [-90, 90]");
+                        rowValid = false;
+                    }
+                    if (yaw < -180 || yaw > 180) {
+                        errors.add("Script error on line " + lineNumber
+                                + " field 4 (\"yaw\"): " + yaw + " is out of range [-180, 180]");
+                        rowValid = false;
+                    }
+                }
+
+                if (rowValid) {
+                    maneuverList.add(new Maneuver(seconds, roll, pitch, yaw));
+                }
             }
+        }
+
+        if (!errors.isEmpty()) {
+            errors.forEach(System.err::println);
+            throw new IllegalArgumentException("Script contains " + errors.size() + " error(s). See above for details.");
         }
 
         if (maneuverList.isEmpty()) {
@@ -73,44 +134,10 @@ public class ManeuverScript {
         }
 
         this.maneuvers = Collections.unmodifiableList(maneuverList);
-        System.out.println("Successfully Loaded " + this.maneuvers.size() + " maneuvers from " + filePath);
-    }
-    private int parseIntField(int line, int fieldNum, String fieldName, String raw) {
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException e) {
-            String msg = "Script error on line " + line + " field " + fieldNum
-                    + " (\"" + fieldName + "\"): \"" + raw + "\" is not an integer";
-            System.err.println(msg);
-            throw new IllegalArgumentException(msg);
-        }
-    }
-
-    private double parseDoubleField(int line, int fieldNum, String fieldName, String raw) {
-        try {
-            return Double.parseDouble(raw);
-        } catch (NumberFormatException e) {
-            String msg = "Script error on line " + line + " field " + fieldNum
-                    + " (\"" + fieldName + "\"): \"" + raw + "\" is not a number";
-            System.err.println(msg);
-            throw new IllegalArgumentException(msg);
-        }
-    }
-
-    private void validateRange(int line, int fieldNum, String fieldName,
-                               double value, double min, double max) {
-        if (value < min || value > max) {
-            String msg = "Script error on line " + line + " field " + fieldNum
-                    + " (\"" + fieldName + "\"): " + value
-                    + " is out of range [" + min + ", " + max + "]";
-            System.err.println(msg);
-            throw new IllegalArgumentException(msg);
-        }
+        System.out.println("Successfully Loaded " + maneuvers.size() + " maneuvers from " + filePath);
     }
 
     public List<Maneuver> getManeuvers() {
         return maneuvers;
     }
 }
- 
-
