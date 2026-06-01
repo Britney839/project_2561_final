@@ -52,3 +52,20 @@ Why: The original suggestion used a single large try/catch per row which would
 have stopped parsing remaining fields on that row if the first field failed.
 Changed it to four separate try/catch blocks per row so all four fields are
 attempted independently, giving the most complete error report per line.
+
+## Session 5 – 2026-06-01
+Task: Task 1 (Maneuver script from file)
+Tool: GitHub Copilot
+Prompt (verbatim):
+> How do I modify Main.java to load a ManeuverScript using the --script flag
+> and replace createAutomatedDemoThread with a short loop that iterates
+> through the script?
+
+Suggestion summary:
+Copilot showed how to replace the old createAutomatedDemoThread call with a
+script-loading block and rewrite the method to loop through the maneuvers
+using modulo to wrap back to the start.
+
+Decision: Accepted with modifications
+Why: Had to declare the script variable before the try block so it was
+accessible when passed into createAutomatedDemoThread.
