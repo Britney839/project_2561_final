@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.Timer;
 
 /**
  * Professional aircraft simulation controller with multithreaded architecture.
@@ -58,6 +57,17 @@ import javax.swing.Timer;
  * professional flight parameters, navigation data, and system status information.
  */
 public class AircraftGUI {
+
+    // references to DirectionControl instances (ensure these exist in your constructor args)
+    private final DirectionControl rollControl;
+    private final DirectionControl pitchControl;
+    private final DirectionControl yawControl;
+
+    // volatile latest values written by simulation thread and read on EDT
+    private volatile double latestRoll = 0.0;
+    private volatile double latestPitch = 0.0;
+    private volatile double latestYaw = 0.0;
+
     // Constants
     private static final int PANEL_WIDTH = 800;
     private static final int PANEL_HEIGHT = 600;
@@ -100,9 +110,6 @@ public class AircraftGUI {
     // Direction controls that drive aircraft orientation.
     // The GUI reads from these every frame instead of generating its own roll/pitch/yaw,
     // so the displayed attitude matches the simulation in Main.
-    private final DirectionControl rollControl;
-    private final DirectionControl pitchControl;
-    private final DirectionControl yawControl;
 
     // Optional resource monitor - if set, GUI throttles its frame rate based on
     // the latest OS CPU / memory measurements published by the monitor thread.
@@ -149,6 +156,10 @@ public class AircraftGUI {
         this.rollControl = rollControl;
         this.pitchControl = pitchControl;
         this.yawControl = yawControl;
+
+        rollControl.addListener(control -> latestRoll = control.getCurrentValue());
+        pitchControl.addListener(control -> latestPitch = control.getCurrentValue());
+        yawControl.addListener(control -> latestYaw = control.getCurrentValue());
     }
 
     public void setResourceMonitor(ResourceMonitor monitor) {

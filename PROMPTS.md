@@ -69,3 +69,12 @@ using modulo to wrap back to the start.
 Decision: Accepted with modifications
 Why: Had to declare the script variable before the try block so it was
 accessible when passed into createAutomatedDemoThread.
+
+## Session 6 – 2026-06-02
+Task: Task 2 (Observer pattern for direction updates)
+Tool: Github Copilot
+Prompts (verbatim):
+> Does this fall under the requirements needed for task 2?
+> Why is my getCurrentValue underlined in my DirectionControl.java file?
+
+Decision: I understood that the getCurrentValue was duplicated and fixed the issue. 

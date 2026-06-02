@@ -7,6 +7,7 @@
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Direction control system for an aircraft axis. Manages a current value and a
@@ -24,6 +25,17 @@ public class DirectionControl {
     private double dampening;
     private double tolerance;
     private double maxStep;
+
+    // listener list
+    private final CopyOnWriteArrayList<DirectionControlListener> listeners = new CopyOnWriteArrayList<>();
+
+    public void addListener(DirectionControlListener l) {
+        if (l != null) listeners.add(l);
+    }
+
+    public void removeListener(DirectionControlListener l) {
+        if (l != null) listeners.remove(l);
+    }
 
     // Statistics tracking
     private double totalDeviation = 0;
@@ -59,40 +71,61 @@ public class DirectionControl {
         this.velocity = 0;
     }
 
+
+
     /**
      * Update the current value based on the physics model and target.
      */
-    public synchronized void update() {
-        double deviation = targetValue - currentValue;
+    public void update() {
+        boolean changed = false;
+        double oldValue;
 
-        if (trackStatistics) {
-            totalDeviation += Math.abs(deviation);
-            maxDeviation = Math.max(maxDeviation, Math.abs(deviation));
-            sampleCount++;
+        synchronized (this) {
+            double deviation = targetValue - currentValue;
+
+            if (trackStatistics) {
+                totalDeviation += Math.abs(deviation);
+                maxDeviation = Math.max(maxDeviation, Math.abs(deviation));
+                sampleCount++;
+            }
+
+            Main.logToCSV(name, targetValue, currentValue, velocity);
+
+            // Skip adjustment if we're already close enough.
+            if (Math.abs(deviation) < tolerance && Math.abs(velocity) < 0.1) {
+                velocity = 0;
+                return; // no change -> no notifications
+            }
+
+            velocity += deviation / inertia;
+            velocity *= dampening;
+
+            if (velocity > maxStep) velocity = maxStep;
+            if (velocity < -maxStep) velocity = -maxStep;
+
+            oldValue = currentValue;
+            currentValue += velocity;
+
+            if (currentValue < min) {
+                currentValue = min;
+                velocity = 0;
+            } else if (currentValue > max) {
+                currentValue = max;
+                velocity = 0;
+            }
+
+            changed = Double.doubleToLongBits(oldValue) != Double.doubleToLongBits(currentValue);
         }
 
-        Main.logToCSV(name, targetValue, currentValue, velocity);
-
-        // Skip adjustment if we're already close enough.
-        if (Math.abs(deviation) < tolerance && Math.abs(velocity) < 0.1) {
-            velocity = 0;
-            return;
-        }
-
-        velocity += deviation / inertia;
-        velocity *= dampening;
-
-        if (velocity > maxStep) velocity = maxStep;
-        if (velocity < -maxStep) velocity = -maxStep;
-
-        currentValue += velocity;
-
-        if (currentValue < min) {
-            currentValue = min;
-            velocity = 0;
-        } else if (currentValue > max) {
-            currentValue = max;
-            velocity = 0;
+        // Notify listeners outside the synchronized block to avoid holding locks
+        if (changed) {
+            for (DirectionControlListener l : listeners) {
+                try {
+                    l.onDirectionChanged(this); // runs on simulation thread
+                } catch (RuntimeException ex) {
+                    System.err.println("DirectionControl listener threw: " + ex.getMessage());
+                }
+            }
         }
     }
 
