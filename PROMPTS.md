@@ -78,3 +78,48 @@ Prompts (verbatim):
 > Why is my getCurrentValue underlined in my DirectionControl.java file?
 
 Decision: I understood that the getCurrentValue was duplicated and fixed the issue. 
+
+## Session 6 – 2026-06-08
+Task: Task 3 (Self-healing worker threads)
+Tool: Copilot
+Prompt:
+> Write a Java class called SupervisedRunner that implements Runnable, takes a
+> worker name, a Runnable, and a BooleanSupplier. It should run the work in a
+> loop, catch exceptions, log them with the worker name and stack trace, sleep
+> with exponential backoff starting at 100ms doubling each time capped at 5
+> seconds, reset backoff after 10 consecutive seconds of clean running, and
+> give up permanently after 5 restarts within 30 seconds.
+
+Suggestion summary:
+Copilot produced the full SupervisedRunner class with the backoff logic,
+restart budget window tracking, clean shutdown on InterruptedException,
+and all log messages including the permanent give-up message.
+
+Decision: Accepted with modifications
+Why: The original tracked restart count as a simple counter that never
+reset. Changed it to reset restartsInWindow and windowStart whenever the
+30-second window expires, so a worker that crashes once every 40 seconds
+never hits the budget cap as the brief intends.
+
+---
+
+## Session 7 – 2026-06-08
+Task: Task 3 (Self-healing worker threads)
+Tool: Copilot
+Prompt:
+> How do I apply SupervisedRunner to the turbulence thread, demo thread, and
+> resource monitor in Main.java, and add an --inject-failures flag that makes
+> the turbulence thread throw at 3, 6, and 9 seconds?
+
+Suggestion summary:
+Copilot showed converting createTurbulenceThread and createAutomatedDemoThread
+to return Runnable instead of Thread, wrapping each in a new Thread with a
+SupervisedRunner, doing the same for the resource monitor, and adding an
+elapsed-time check inside the turbulence loop that throws a RuntimeException
+at the 3, 6, and 9 second marks when the flag is set.
+
+Decision: Accepted with modifications
+Why: Copilot's inject-failures check used System.currentTimeMillis() divided
+by 1000 compared with == which could miss the exact second if the thread
+slept through it. Changed it to check elapsed >= 3 && elapsed < 4 style
+intervals to make the triggers reliable regardless of sleep ti

@@ -38,11 +38,16 @@ public class Main {
     private static Map<String, String> parseArgs(String[] args) {
         Map<String, String> argMap = new HashMap<>();
         for (int i = 0; i < args.length; i++) {
-            if (args[i].startsWith("--") && i + 1 < args.length) {
+            if (args[i].startsWith("--")) {
                 String key = args[i].substring(2);
-                String value = args[i + 1];
-                argMap.put(key, value);
-                i++; // Skip the value in next iteration
+                // Check if next argument is a value or another flag (or end of args)
+                if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                    argMap.put(key, args[i + 1]);
+                    i++; // skip the value
+                } else {
+                    // Flag with no value — store empty string so containsKey works
+                    argMap.put(key, "");
+                }
             }
         }
         return argMap;
@@ -88,6 +93,10 @@ public class Main {
     public static void main(String[] args) throws InterruptedException {
         // Parse command line arguments
         Map<String, String> params = parseArgs(args);
+        boolean injectFailures = params.containsKey("inject-failures");
+        if (injectFailures) {
+            System.out.println("*** Failure injection enabled — turbulence thread will throw at 3s, 6s, 9s ***");
+        }
 
         // Apply the native Swing look-and-feel and announce the host OS.
         PlatformSupport.applySystemLookAndFeel();
@@ -149,8 +158,7 @@ public class Main {
 
         // Create and start threads
         Thread userInputThread = createInputThread(rollControl, pitchControl, yawControl, turbulenceEnabled, running);
-        Thread turbulenceThread = createTurbulenceThread(rollControl, pitchControl, yawControl, turbulenceEnabled,
-                running);
+
         String scriptPath = params.getOrDefault("script", "default_maneuvers.csv");
         ManeuverScript script;
         try {
@@ -164,7 +172,14 @@ public class Main {
             return;
         }
 
-        Thread automatedDemoThread = createAutomatedDemoThread(rollControl, pitchControl, yawControl, script);
+        Runnable turbulenceWork = createTurbulenceRunnable(rollControl, pitchControl, yawControl, turbulenceEnabled,
+                running, injectFailures);
+        Runnable demoWork = createDemoRunnable(rollControl, pitchControl, yawControl, script);
+
+        Thread turbulenceThread = new Thread(new SupervisedRunner("turbulence", turbulenceWork, running::get),
+                "turbulence-supervisor");
+        Thread automatedDemoThread = new Thread(new SupervisedRunner("demo", demoWork, running::get),
+                "demo-supervisor");
 
         userInputThread.start();
         turbulenceThread.start();
@@ -179,7 +194,12 @@ public class Main {
         // tells the GUI to throttle its frame rate when the host is under load.
         ResourceMonitor resourceMonitor = new ResourceMonitor(1000, gui::setPerformanceLevel);
         gui.setResourceMonitor(resourceMonitor);
-        Thread resourceMonitorThread = resourceMonitor.start();
+        ResourceMonitor finalMonitor = resourceMonitor;
+        Thread resourceMonitorThread = new Thread(
+                new SupervisedRunner("resource-monitor", finalMonitor, running::get),
+                "resource-monitor-supervisor");
+        resourceMonitorThread.setDaemon(true);
+        resourceMonitorThread.start();
 
         gui.show();
 
@@ -307,47 +327,60 @@ public class Main {
         });
     }
 
-     private static Thread createTurbulenceThread(DirectionControl roll, DirectionControl pitch,
-            DirectionControl yaw, AtomicBoolean turbulenceEnabled, AtomicBoolean running) {
-        final Random rnd = new Random();
-        return new Thread(() -> {
-            try {
-                while (running.get()) {
-                    if (turbulenceEnabled.get()) {
-                        // Small random target nudges (degrees)
-                        double r = (rnd.nextDouble() * 4.0) - 2.0; // -2 .. +2
-                        double p = (rnd.nextDouble() * 2.0) - 1.0; // -1 .. +1
-                        double y = (rnd.nextDouble() * 4.0) - 2.0; // -2 .. +2
+    /**
+     * Returns the turbulence Runnable (without wrapping it in a Thread).
+     * The SupervisedRunner in main() wraps it instead.
+     * If injectFailures is true, throws a RuntimeException at the 3-, 6-,
+     * and 9-second marks to test the supervisor.
+     */
+    private static Runnable createTurbulenceRunnable(
+            DirectionControl roll, DirectionControl pitch, DirectionControl yaw,
+            AtomicBoolean turbulenceEnabled, AtomicBoolean running, boolean injectFailures) {
 
-                        // Apply gentle absolute targets; keep values small so demo remains stable.
-                        try {
-                            roll.setTargetValue(r);
-                            pitch.setTargetValue(p);
-                            yaw.setTargetValue(y);
-                        } catch (Exception ex) {
-                            // If DirectionControl implementation doesn't accept these calls,
-                            // ignore and continue; turbulence is non-critical.
+        return () -> {
+            Random random = new Random();
+            long startTime = System.currentTimeMillis();
+
+            while (running.get()) {
+                try {
+                    if (injectFailures) {
+                        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                        if (elapsed == 3 || elapsed == 6 || elapsed == 9) {
+                            throw new RuntimeException(
+                                    "Injected failure at " + elapsed + "s mark");
                         }
                     }
-                    Thread.sleep(500); // adjust frequency if desired
+
+                    if (turbulenceEnabled.get()) {
+                        double rollJitter = (random.nextDouble() - 0.5) * 2.0;
+                        double pitchJitter = (random.nextDouble() - 0.5) * 1.5;
+                        double yawJitter = (random.nextDouble() - 0.5) * 1.0;
+
+                        roll.setCurrentValue(roll.getCurrentValue() + rollJitter);
+                        pitch.setCurrentValue(pitch.getCurrentValue() + pitchJitter);
+                        yaw.setCurrentValue(yaw.getCurrentValue() + yawJitter);
+                    }
+
+                    Thread.sleep(200);
+
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return; // clean shutdown
                 }
-            } catch (InterruptedException e) {
-                // Exit quietly on interrupt
-                Thread.currentThread().interrupt();
             }
-        }, "TurbulenceThread");
+        };
     }
 
     /**
-     * Creates a thread that applies turbulence to the aircraft
+     * Returns the demo Runnable (without wrapping it in a Thread).
+     * The SupervisedRunner in main() wraps it instead.
      */
-    private static Thread createAutomatedDemoThread(
+    private static Runnable createDemoRunnable(
             DirectionControl roll, DirectionControl pitch,
             DirectionControl yaw, ManeuverScript script) {
 
-        return new Thread(() -> {
+        return () -> {
             try {
-                // Brief startup delay so the GUI has time to appear
                 Thread.sleep(3000);
                 System.out.println("\nStarting scripted flight demonstration...");
 
@@ -367,14 +400,12 @@ public class Main {
 
                     Thread.sleep(m.seconds * 1000L);
 
-                    // Wrap around to the first maneuver after the last one
                     index = (index + 1) % maneuvers.size();
                 }
             } catch (InterruptedException e) {
-                System.out.println("Demo thread interrupted.");
+                // clean shutdown
             }
-        });
+        };
     }
 
-   
 }
